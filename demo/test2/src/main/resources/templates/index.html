@@ -433,6 +433,14 @@
     <!-- サイドバー（履歴） -->
     <div class="sidebar">
         <div class="sidebar-header">📋 会話履歴</div>
+        <div class="sidebar-stats" style="padding: 0 1rem 1rem; color: #5f6368; font-size: 0.85rem;">
+            <div th:if="${summary != null}">合計会話: <strong th:text="${summary.totalChats}"></strong> 件</div>
+            <div th:if="${summary != null}">平均信頼度: <strong th:text="${#numbers.formatDecimal(summary.averageConfidence, 0, 'POINT', 2, 'NONE')} + '%' "></strong></div>
+            <div th:if="${agentUsage != null and !#lists.isEmpty(agentUsage)}" style="margin-top: 0.5rem;">
+                <div style="font-weight: 600; margin-bottom: 0.25rem;">採用AI内訳</div>
+                <div th:each="usage : ${agentUsage}" style="font-size: 0.78rem; color: #5f6368;">・<span th:text="${usage.adoptedAgent}"></span> : <span th:text="${usage.count}"></span> 件</div>
+            </div>
+        </div>
         <div class="history-list" id="historyList">
             <div th:if="${#lists.isEmpty(chatHistory)}" style="padding: 1rem; text-align: center; color: #9aa0a6; font-size: 0.85rem;">
                 まだ履歴がありません

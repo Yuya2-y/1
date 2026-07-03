@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ログイン | AI検証チャット</title>
+    <title>新規登録 | AI検証チャット</title>
     <style>
         body {
             margin: 0;
@@ -63,32 +63,44 @@
             color: #ff6b6b;
             font-size: 0.95rem;
         }
+        .message {
+            margin-bottom: 1rem;
+            color: #8ab4f8;
+            font-size: 0.95rem;
+        }
         .hint {
             margin-top: 1rem;
             font-size: 0.9rem;
             color: #9aa0a6;
         }
+        .hint a {
+            color: #4f8bff;
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>
 <div class="card">
-    <h1>ログイン</h1>
+    <h1>新規登録</h1>
     <div th:if="${error}" class="error" th:text="${error}"></div>
-    <div th:if="${message}" class="hint" th:text="${message}"></div>
-    <form th:action="@{/login}" method="post">
+    <div th:if="${message}" class="message" th:text="${message}"></div>
+    <form th:action="@{/register}" method="post">
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
         <div class="field">
             <label for="username">ユーザー名</label>
-            <input type="text" id="username" name="username" placeholder="admin" required autofocus>
+            <input type="text" id="username" name="username" placeholder="yourname" required autofocus>
         </div>
         <div class="field">
             <label for="password">パスワード</label>
             <input type="password" id="password" name="password" placeholder="password" required>
         </div>
-        <button type="submit" class="button">ログイン</button>
+        <div class="field">
+            <label for="confirmPassword">パスワード確認</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" placeholder="password" required>
+        </div>
+        <button type="submit" class="button">登録する</button>
     </form>
-    <div class="hint">初期アカウント: admin / password</div>
-    <div class="hint">新規登録は <a th:href="@{/register}">こちら</a></div>
+    <div class="hint">すでにアカウントをお持ちの方は <a th:href="@{/login}">こちら</a></div>
 </div>
 </body>
 </html>

@@ -38,6 +38,13 @@ public class ChatHistory {
     @Column(columnDefinition = "TEXT")
     private String conversationLog;
     
+    @Column(name = "adopted_agent")
+    private String adoptedAgent;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private UserAccount user;
+    
     private LocalDateTime createdAt;
     
     @PrePersist

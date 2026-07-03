@@ -24,12 +24,15 @@ public class ChatController {
         if (principal == null) {
             return "redirect:/login";
         }
-        List<ChatHistory> chatHistory = aiAgentService.getAllChatHistory();
+        String username = principal.getName();
+        List<ChatHistory> chatHistory = aiAgentService.getChatHistoryForUser(username);
         model.addAttribute("chatHistory", chatHistory);
+        model.addAttribute("summary", aiAgentService.getChatSummaryForUser(username));
+        model.addAttribute("agentUsage", aiAgentService.getAgentUsageSummaryForUser(username));
         model.addAttribute("query", "");
         model.addAttribute("selectedHistory", null);
         model.addAttribute("canInput", true);
-        model.addAttribute("currentUser", principal.getName());
+        model.addAttribute("currentUser", username);
         return "index";
     }
 
@@ -38,22 +41,17 @@ public class ChatController {
         if (principal == null) {
             return "redirect:/login";
         }
-        List<ChatHistory> chatHistory = aiAgentService.getAllChatHistory();
+        String username = principal.getName();
+        List<ChatHistory> chatHistory = aiAgentService.getChatHistoryForUser(username);
         model.addAttribute("chatHistory", chatHistory);
+        model.addAttribute("summary", aiAgentService.getChatSummaryForUser(username));
+        model.addAttribute("agentUsage", aiAgentService.getAgentUsageSummaryForUser(username));
         model.addAttribute("query", "");
         model.addAttribute("result", null);
         model.addAttribute("selectedHistory", null);
         model.addAttribute("canInput", true);
-        model.addAttribute("currentUser", principal.getName());
+        model.addAttribute("currentUser", username);
         return "index";
-    }
-
-    @GetMapping("/login")
-    public String loginPage(Principal principal) {
-        if (principal != null) {
-            return "redirect:/";
-        }
-        return "login";
     }
 
     @PostMapping("/chat")
@@ -70,10 +68,10 @@ public class ChatController {
 
         ChatHistory selectedHistory = null;
         if (historyId != null) {
-            selectedHistory = aiAgentService.getChatHistoryById(historyId);
+            selectedHistory = aiAgentService.getChatHistoryByIdAndUsername(historyId, principal.getName());
         }
 
-        var chatResult = aiAgentService.processMultiAgentChat(query, selectedHistory);
+        var chatResult = aiAgentService.processMultiAgentChat(query, selectedHistory, principal.getName());
         ApiResponseDto result = chatResult.getResult();
         selectedHistory = chatResult.getChatHistory();
 
@@ -83,8 +81,10 @@ public class ChatController {
         model.addAttribute("canInput", true);
         model.addAttribute("currentUser", principal.getName());
 
-        List<ChatHistory> chatHistory = aiAgentService.getAllChatHistory();
+        List<ChatHistory> chatHistory = aiAgentService.getChatHistoryForUser(principal.getName());
         model.addAttribute("chatHistory", chatHistory);
+        model.addAttribute("summary", aiAgentService.getChatSummaryForUser(principal.getName()));
+        model.addAttribute("agentUsage", aiAgentService.getAgentUsageSummaryForUser(principal.getName()));
         return "index";
     }
 
@@ -93,13 +93,15 @@ public class ChatController {
         if (principal == null) {
             return "redirect:/login";
         }
-        ChatHistory selectedHistory = aiAgentService.getChatHistoryById(id);
+        ChatHistory selectedHistory = aiAgentService.getChatHistoryByIdAndUsername(id, principal.getName());
         if (selectedHistory == null) {
             return "redirect:/";
         }
-        List<ChatHistory> chatHistory = aiAgentService.getAllChatHistory();
+        List<ChatHistory> chatHistory = aiAgentService.getChatHistoryForUser(principal.getName());
         model.addAttribute("selectedHistory", selectedHistory);
         model.addAttribute("chatHistory", chatHistory);
+        model.addAttribute("summary", aiAgentService.getChatSummaryForUser(principal.getName()));
+        model.addAttribute("agentUsage", aiAgentService.getAgentUsageSummaryForUser(principal.getName()));
         model.addAttribute("query", "");
         model.addAttribute("canInput", true);
         model.addAttribute("currentUser", principal.getName());
