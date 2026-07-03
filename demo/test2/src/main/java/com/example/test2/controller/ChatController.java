@@ -48,6 +48,14 @@ public class ChatController {
         return "index";
     }
 
+    @GetMapping("/login")
+    public String loginPage(Principal principal) {
+        if (principal != null) {
+            return "redirect:/";
+        }
+        return "login";
+    }
+
     @PostMapping("/chat")
     public String chat(@RequestParam("query") String query,
                        @RequestParam(value = "historyId", required = false) Long historyId,
