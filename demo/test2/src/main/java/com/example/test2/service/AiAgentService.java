@@ -10,7 +10,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import java.util.*;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class AiAgentService {
@@ -25,6 +35,7 @@ public class AiAgentService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ChatHistoryRepository chatHistoryRepository;
+    private final Executor aiTaskExecutor;
     
     // GeminiのURL
     private final String API_URL = 
@@ -33,8 +44,9 @@ public class AiAgentService {
     // 正しいGroqの窓口（APIエンドポイント）URL
     private final String GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-    public AiAgentService(ChatHistoryRepository chatHistoryRepository) {
+    public AiAgentService(ChatHistoryRepository chatHistoryRepository, Executor aiTaskExecutor) {
         this.chatHistoryRepository = chatHistoryRepository;
+        this.aiTaskExecutor = aiTaskExecutor;
     }
 
     /**
@@ -70,13 +82,9 @@ public class AiAgentService {
             String draft = callGeminiWithFallback(initialPrompt, inputText, false);
             resultDto.setDraft_answer(draft);
 
-            Thread.sleep(1500);
-
             String critiquePrompt = "【元の質問】:\n" + inputText + "\n\n【提出された回答】:\n" + draft;
             String critique = callGeminiWithFallback("あなたは厳格な検証官です。提出された回答にウソや矛盾がないか厳しく批判し、修正案を出してください。", critiquePrompt, false);
             resultDto.setCritique(critique);
-
-            Thread.sleep(1500);
 
             String scoringSystem = "あなたは最終まとめ役です。最初の回答と検証官の批判を元に、最も正確な【最終回答】を作成し、信頼性を以下の4項目（各25点満点）で厳格に採点し、合計の【信頼性（%）】を算出してください。出力は必ず以下のJSONフォーマット（キー名厳守）のみで返してください。\n{\"final_answer\": \"最終回答...\", \"confidence_score\": 85}";
             String scoringUser = "【最初の回答】:\n" + draft + "\n\n【検証官の批判】:\n" + critique;
@@ -130,19 +138,67 @@ public class AiAgentService {
      * Geminiを呼び出すメソッド（429エラーや最大リトライ超過時にGroqへフォールバックする）
      */
     private String callGeminiWithFallback(String systemPrompt, String userPrompt, boolean forceJson) throws Exception {
-        // Gemini APIキーが未設定または空文字の場合は起動時に例外にならないよう直接Groqへフォールバックする
+        // Gemini APIキーが未設定または空文字の場合は直接Groqへフォールバックする
         if (apiKey == null || apiKey.trim().isEmpty()) {
             System.out.println("⚠️ Gemini APIキーが未設定です。直接Groq (Llama 3.3) へフォールバックします。");
             return callGroq(systemPrompt, userPrompt, forceJson);
         }
 
         try {
-            // まずは従来のGemini呼び出しを試みる
-            return callGemini(systemPrompt, userPrompt, forceJson);
+            return callFirstAvailableAgent(systemPrompt, userPrompt, forceJson);
         } catch (Exception e) {
-            // Geminiが無料枠制限(429)などで失敗した場合、Groq(Llama 3.3)に切り替える
-            System.out.println("⚠️ Geminiの呼び出しに失敗しました。Groq (Llama 3.3) へフォールバックします。理由: " + e.getMessage());
+            System.out.println("⚠️ Gemini/Groqの同時実行に失敗しました。再試行としてGroqへフォールバックします。理由: " + e.getMessage());
             return callGroq(systemPrompt, userPrompt, forceJson);
+        }
+    }
+
+    private String callFirstAvailableAgent(String systemPrompt, String userPrompt, boolean forceJson) throws Exception {
+        CompletableFuture<String> geminiFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return callGemini(systemPrompt, userPrompt, forceJson);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }, aiTaskExecutor);
+
+        CompletableFuture<String> groqFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return callGroq(systemPrompt, userPrompt, forceJson);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }, aiTaskExecutor);
+
+        CompletableFuture<String> firstSuccessful = new CompletableFuture<>();
+        AtomicInteger remaining = new AtomicInteger(2);
+
+        geminiFuture.whenComplete((result, error) -> {
+            if (error == null) {
+                firstSuccessful.complete(result);
+            } else if (remaining.decrementAndGet() == 0) {
+                firstSuccessful.completeExceptionally(error.getCause() != null ? error.getCause() : error);
+            }
+        });
+
+        groqFuture.whenComplete((result, error) -> {
+            if (error == null) {
+                firstSuccessful.complete(result);
+            } else if (remaining.decrementAndGet() == 0) {
+                firstSuccessful.completeExceptionally(error.getCause() != null ? error.getCause() : error);
+            }
+        });
+
+        try {
+            String response = firstSuccessful.get(60, TimeUnit.SECONDS);
+            geminiFuture.cancel(true);
+            groqFuture.cancel(true);
+            return response;
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            if (cause instanceof Exception) {
+                throw (Exception) cause;
+            }
+            throw new Exception(cause);
         }
     }
 
